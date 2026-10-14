@@ -1,6 +1,6 @@
 # Ask-Your-PDFs (RAG)
 
-Small Python retrieval-augmented generation (RAG) application for asking questions about a folder of PDFs. It extracts page text, creates overlapping chunks, embeds them with `sentence-transformers`, stores them in persistent Chroma, retrieves the most relevant chunks, and asks an OpenAI-compatible LLM to answer with page-level citations.
+Small Python retrieval-augmented generation (RAG) application for asking questions about a folder of PDFs. It extracts page text, creates overlapping chunks, embeds them with `sentence-transformers`, stores them in persistent Chroma, retrieves the most relevant chunks, and asks Ollama Cloud to answer with page-level citations.
 
 ## Setup
 
@@ -10,10 +10,12 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# Put an OpenAI API key in .env, or export OPENAI_API_KEY in your shell.
+# Put your Ollama Cloud API key in .env, or export OLLAMA_API_KEY in your shell.
 ```
 
 The default embedding model is `all-MiniLM-L6-v2`. The first run downloads it from Hugging Face and caches it locally.
+
+Create an Ollama Cloud API key at https://ollama.com/settings/keys. The default generation model is `gemma4:31b`.
 
 ## Ingest PDFs
 
@@ -67,4 +69,4 @@ These expected citations identify the document/page containing the answer; exact
 
 ## Design notes
 
-The implementation uses PyMuPDF for extraction, word-based chunks of 900 words with 150 words of overlap, normalized MiniLM embeddings, cosine-distance Chroma search, and an OpenAI-compatible chat completion for generation. The LLM receives the retrieved text together with its source label, and the system prompt explicitly forbids unsupported answers and invented citations.
+The implementation uses PyMuPDF for extraction, word-based chunks of 900 words with 150 words of overlap, normalized MiniLM embeddings, cosine-distance Chroma search, and Ollama Cloud's `/api/chat` endpoint for generation. The LLM receives the retrieved text together with its source label, and the system prompt explicitly forbids unsupported answers and invented citations.

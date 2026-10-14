@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import os
 import re
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -16,6 +19,8 @@ from sentence_transformers import SentenceTransformer
 
 DEFAULT_COLLECTION = "pdf_chunks"
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+OLLAMA_BASE_URL = "https://ollama.com"
+DEFAULT_OLLAMA_MODEL = "gemma4:31b"
 load_dotenv()
 
 
@@ -168,17 +173,20 @@ def generate_answer(
     chunks: Sequence[RetrievedChunk],
     model: str | None = None,
 ) -> str:
-    """Answer using an OpenAI-compatible API and require page-level citations."""
+    """Answer with Ollama Cloud and require page-level citations."""
     if not chunks:
         return "I don't know based on the provided documents."
 
-    from openai import OpenAI
+    api_key = os.getenv("OLLAMA_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "OLLAMA_API_KEY is not set. Add your key to .env after OLLAMA_API_KEY=."
+        )
 
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    response = client.chat.completions.create(
-        model=model or os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        temperature=0,
-        messages=[
+    payload = {
+        "model": model or os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
+        "stream": False,
+        "messages": [
             {
                 "role": "system",
                 "content": (
@@ -193,5 +201,28 @@ def generate_answer(
                 "content": f"Question: {question}\n\nExcerpts:\n{build_context(chunks)}",
             },
         ],
+    }
+    request = Request(
+        f"{OLLAMA_BASE_URL}/api/chat",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
     )
-    return response.choices[0].message.content or "I don't know based on the provided documents."
+    try:
+        with urlopen(request, timeout=120) as response:
+            result = json.load(response)
+    except HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Ollama returned {error.code}: {body or error.reason}"
+        ) from error
+    except URLError as error:
+        raise RuntimeError(f"Network error calling Ollama: {error.reason}") from error
+
+    content = result.get("message", {}).get("content")
+    if not content:
+        raise RuntimeError("Ollama returned an empty response.")
+    return content

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from src.rag import chunk_text, extract_chunks
+from src.rag import chunk_text, extract_chunks, generate_answer
 
 
 def test_chunk_text_has_overlap():
@@ -29,3 +29,7 @@ def test_extract_chunks_preserves_page_metadata(tmp_path: Path):
     chunks = extract_chunks(tmp_path, chunk_size=20, overlap=3)
     assert chunks[0].filename == "example.pdf"
     assert chunks[0].page == 1
+
+
+def test_empty_retrieval_uses_safe_fallback():
+    assert generate_answer("unknown", []) == "I don't know based on the provided documents."

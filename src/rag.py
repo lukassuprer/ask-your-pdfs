@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import json
+import ssl
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from dataclasses import dataclass
@@ -12,7 +13,8 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 import chromadb
-import fitz
+import pymupdf as fitz
+import certifi
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
@@ -144,9 +146,10 @@ def retrieve(
         raise ValueError("The vector database is empty. Run ingest.py first.")
 
     query_embedding = Embedder(model_name).encode([question])[0]
+    result_count = min(top_k, collection.count())
     result = collection.query(
         query_embeddings=[query_embedding],
-        n_results=top_k,
+        n_results=result_count,
         include=["documents", "metadatas", "distances"],
     )
     return [
@@ -212,7 +215,8 @@ def generate_answer(
         method="POST",
     )
     try:
-        with urlopen(request, timeout=120) as response:
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        with urlopen(request, timeout=120, context=ssl_context) as response:
             result = json.load(response)
     except HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")

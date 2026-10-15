@@ -6,17 +6,28 @@ import os
 import re
 import json
 import ssl
+import logging
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
+# These libraries emit optional telemetry/download notices during normal local use.
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+
 import chromadb
+from chromadb.config import Settings
 import pymupdf as fitz
 import certifi
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
+
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
 
 DEFAULT_COLLECTION = "pdf_chunks"
@@ -90,7 +101,10 @@ class Embedder:
 
 
 def get_collection(db_dir: Path, collection_name: str = DEFAULT_COLLECTION):
-    client = chromadb.PersistentClient(path=str(db_dir))
+    client = chromadb.PersistentClient(
+        path=str(db_dir),
+        settings=Settings(anonymized_telemetry=False),
+    )
     return client.get_or_create_collection(
         name=collection_name,
         metadata={"hnsw:space": "cosine"},
